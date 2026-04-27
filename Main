@@ -1,0 +1,175 @@
+-- Lost Currents ESP by Zamasumi
+-- github.com/Zamasumi/Lost-Currents-esp
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local function getPos(obj)
+    local ok, pos = pcall(function() return obj.Position end)
+    if ok and pos then return pos end
+    local ok2, part = pcall(function()
+        return obj:FindFirstChild("HumanoidRootPart")
+            or obj:FindFirstChild("Root")
+            or obj:FindFirstChild("Torso")
+            or obj:FindFirstChild("Handle")
+            or obj:FindFirstChildWhichIsA("BasePart")
+    end)
+    if ok2 and part then
+        local ok3, p = pcall(function() return part.Position end)
+        if ok3 and p then return p end
+    end
+    return nil
+end
+
+local function calcDist(a, b)
+    local dx, dy, dz = a.X-b.X, a.Y-b.Y, a.Z-b.Z
+    return math.floor(math.sqrt(dx*dx + dy*dy + dz*dz) + 0.5)
+end
+
+local function getW2S(pos)
+    local sp, onScr
+    pcall(function()
+        if type(WorldToScreen) == "function" then
+            sp, onScr = WorldToScreen(pos)
+        else
+            local vp, vis = Camera:WorldToViewportPoint(pos)
+            sp = Vector2.new(vp.X, vp.Y)
+            onScr = vis
+        end
+    end)
+    return sp, onScr
+end
+
+UI.AddTab("LC ESP", function(tab)
+    local left = tab:Section("Materials", "Left")
+    left:Toggle("esp_gold",       "Gold")
+    left:Toggle("esp_scrap",      "Scrap")
+    left:Toggle("esp_plastic",    "Plastic")
+    left:Toggle("esp_cloth",      "Cloth")
+    left:Toggle("esp_wood",       "Wood")
+    left:Toggle("esp_rope",       "Rope")
+    left:Toggle("esp_crystals",   "Crystals")
+    left:Toggle("esp_blueprints", "Blueprints")
+    left:Toggle("esp_helmets",    "Helmets")
+
+    local right = tab:Section("World", "Right")
+    right:Toggle("esp_barrels", "Barrels")
+    right:Toggle("esp_sharks",  "Sharks")
+end)
+
+local ITEMS = {
+    { id = "esp_gold",       c = Color3.fromRGB(255, 215, 0),   label = "Gold",
+      folder = function() local m = Workspace:FindFirstChild("Materials") return m and m:FindFirstChild("Gold") end },
+    { id = "esp_scrap",      c = Color3.fromRGB(180, 180, 180), label = "Scrap",
+      folder = function() local m = Workspace:FindFirstChild("Materials") return m and m:FindFirstChild("Scrap") end },
+    { id = "esp_plastic",    c = Color3.fromRGB(0, 200, 255),   label = "Plastic",
+      folder = function() local m = Workspace:FindFirstChild("Materials") return m and m:FindFirstChild("Plastic") end },
+    { id = "esp_cloth",      c = Color3.fromRGB(255, 150, 200), label = "Cloth",
+      folder = function() local m = Workspace:FindFirstChild("Materials") return m and m:FindFirstChild("Cloth") end },
+    { id = "esp_wood",       c = Color3.fromRGB(180, 100, 30),  label = "Wood",
+      folder = function() local m = Workspace:FindFirstChild("Materials") return m and m:FindFirstChild("Wood") end },
+    { id = "esp_rope",       c = Color3.fromRGB(210, 180, 100), label = "Rope",
+      folder = function() local m = Workspace:FindFirstChild("Materials") return m and m:FindFirstChild("Rope") end },
+    { id = "esp_crystals",   c = Color3.fromRGB(100, 255, 200), label = "Crystals",
+      folder = function() local m = Workspace:FindFirstChild("Materials") local c = m and m:FindFirstChild("Circuit") return c and c:FindFirstChild("Crystals") end },
+    { id = "esp_blueprints", c = Color3.fromRGB(50, 100, 255),  label = "Blueprints",
+      folder = function() local m = Workspace:FindFirstChild("Materials") local c = m and m:FindFirstChild("Circuit") return c and c:FindFirstChild("Blueprints") end },
+    { id = "esp_helmets",    c = Color3.fromRGB(255, 80, 80),   label = "Helmet",
+      folder = function() local m = Workspace:FindFirstChild("Materials") local h = m and m:FindFirstChild("Helmet") return h and h:FindFirstChild("Helmet") end },
+    { id = "esp_barrels",    c = Color3.fromRGB(0, 255, 255),   label = "Barrel",
+      folder = function() local m = Workspace:FindFirstChild("Map") return m and m:FindFirstChild("Barrels") end },
+}
+
+local espPool = {}
+
+task.spawn(function()
+    while true do
+        task.wait(0.05)
+        pcall(function() Camera = Workspace.CurrentCamera end)
+
+        pcall(function()
+            local camPos
+            pcall(function() camPos = Camera.Position end)
+            local slot = 0
+
+            for _, item in ipairs(ITEMS) do
+                if not UI.GetValue(item.id) then continue end
+                local folder = item.folder()
+                if not folder then continue end
+
+                for _, obj in ipairs(folder:GetChildren()) do
+                    local pos = getPos(obj)
+                    if not pos then continue end
+                    local sp, onScr = getW2S(pos)
+                    if not onScr or not sp then continue end
+
+                    slot = slot + 1
+                    local label = item.label
+                    if camPos then
+                        pcall(function()
+                            label = label .. " [" .. calcDist(pos, camPos) .. "m]"
+                        end)
+                    end
+
+                    if not espPool[slot] then
+                        local dr = Drawing.new("Text")
+                        dr.Center = true
+                        dr.Outline = true
+                        espPool[slot] = dr
+                    end
+
+                    local dr = espPool[slot]
+                    dr.Text = label
+                    dr.Position = sp
+                    dr.Size = 16
+                    dr.Color = item.c
+                    dr.Visible = true
+                end
+            end
+
+            if UI.GetValue("esp_sharks") then
+                local npcFolder = Workspace:FindFirstChild("NPC")
+                if npcFolder then
+                    for _, npc in ipairs(npcFolder:GetChildren()) do
+                        if npc.Name == "Shark" then
+                            local pos = getPos(npc)
+                            if not pos then continue end
+                            local sp, onScr = getW2S(pos)
+                            if not onScr or not sp then continue end
+
+                            slot = slot + 1
+                            local label = "Shark"
+                            if camPos then
+                                pcall(function()
+                                    label = "Shark [" .. calcDist(pos, camPos) .. "m]"
+                                end)
+                            end
+
+                            if not espPool[slot] then
+                                local dr = Drawing.new("Text")
+                                dr.Center = true
+                                dr.Outline = true
+                                espPool[slot] = dr
+                            end
+
+                            local dr = espPool[slot]
+                            dr.Text = label
+                            dr.Position = sp
+                            dr.Size = 18
+                            dr.Color = Color3.fromRGB(255, 50, 50)
+                            dr.Visible = true
+                        end
+                    end
+                end
+            end
+
+            for i = slot + 1, #espPool do
+                espPool[i].Visible = false
+            end
+        end)
+    end
+end)
+
+notify("LC ESP | Zamasumi", "Loaded", 3)
